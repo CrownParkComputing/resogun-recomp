@@ -30,6 +30,9 @@ EH_FRAME_HDR = 0x6474e550  # PT_GNU_EH_FRAME
 # the code is unchanged, so the eboot's GOT slot tells which function each import is (eboot 01.10).
 # Without dlcldr.prx in sce_module the host's sceAppContent serves them.
 DLC_LOADER_LIBRARY = 'dlcldr'
+# The eboot reaches libSceAppContent through the linked dlcldr module, never through
+# sceSysmoduleLoadModule(0xb4), so the loader holds the reference for it (runtime_content.c).
+CAPABILITY_DLC_LOADER = 2
 DLC_LOADER_SLOTS = {
     0xd06238: 'sceAppContentAppParamGetInt',
     0xd06240: 'sceAppContentGetAddcontInfo',
@@ -316,7 +319,8 @@ def link(game, out, module_names=DEFAULT_MODULES, deferred=None):
         raise ValueError('unsupported eboot TLS layout')
     procparam = next(p for p in main['ph'] if p['type'] == 0x61000001)
     with (out / 'boot-linked.bin').open('wb') as f:
-        f.write(struct.pack('<8s6Q', b'RGIMAGE7', len(image), entry, len(segments), len(relocs), len(names), flags))
+        f.write(struct.pack('<8s6Q', b'RGIMAGE7', len(image), entry, len(segments), len(relocs), len(names),
+                            flags | (CAPABILITY_DLC_LOADER if dlc_loader else 0)))
         f.write(struct.pack('<Q', procparam['vaddr']))
         f.write(struct.pack('<4Q', *main_tls_values))
         f.write(struct.pack('<Q', len(table)))

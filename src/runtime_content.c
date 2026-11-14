@@ -12,7 +12,7 @@
 #define PARAMETER ((int32_t)0x80d90002)
 #define BUSY ((int32_t)0x80d90003)
 #define NO_ENTITLEMENT ((int32_t)0x80d90007)
-static unsigned refs, initialized, configured;
+static unsigned refs, initialized, configured, linked;
 static uint32_t parameters[5];
 static unsigned queries;
 void runtime_content_configure(const uint32_t values[5]) {
@@ -50,6 +50,13 @@ static ABI int32_t module_unload(uint16_t id) {
     if (id==0xb4) { refs=module_refs[id]; if (!refs) initialized=0; }
     return 0;
 }
+/* A DLC-unlocker build reaches libSceAppContent through the linked 'dlcldr' module instead of
+ * sceSysmoduleLoadModule(0xb4), so the loader holds the reference for it (capability bit 1). */
+void runtime_content_link_provider(void) {
+    ++module_refs[0xb4];
+    refs=module_refs[0xb4]; linked=1;
+    printf("Runtime: AppContent host provider linked for the DLC unlocker; references=%u\n",refs);
+}
 static void require_loaded(void) {
     require_provider();
     if (!refs) { fputs("STOP: AppContent called before module load\n",stderr); exit(21); }
@@ -66,7 +73,9 @@ static ABI int32_t content_init(const unsigned char *init,unsigned char *boot) {
 }
 static void require_initialized(void) {
     require_loaded();
-    if (!initialized) { fputs("STOP: AppContent query before initialization\n",stderr); exit(21); }
+    /* The DLC unlocker's module answers these from its own table, so a patched eboot queries
+     * without calling sceAppContentInitialize first; only the stock contract needs it. */
+    if (!initialized && !linked) { fputs("STOP: AppContent query before initialization\n",stderr); exit(21); }
 }
 static ABI int32_t param_int(uint32_t id,int32_t *out) {
     require_initialized();

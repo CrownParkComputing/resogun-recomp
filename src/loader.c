@@ -725,8 +725,11 @@ int main(int argc, char **argv) {
     uint64_t size = read64(f), entry = read64(f), ns = read64(f), nr = read64(f);
     import_count = read64(f);
     uint64_t capabilities = memcmp(magic, "RGIMAGE1", 8) ? read64(f) : 0;
-    if (capabilities & ~UINT64_C(1)) fail("unknown runtime capabilities");
-    runtime_start(strict_imports ? 0 : capabilities);
+    if (capabilities & ~UINT64_C(3)) fail("unknown runtime capabilities");
+    runtime_start(strict_imports ? 0 : (capabilities & 1));
+    /* The eboot imports libSceAppContent from the linked 'dlcldr' module and never loads the
+     * system module: hold its reference, as the PS4's linker does for a module's dependency. */
+    if (capabilities & 2) runtime_content_link_provider();
     if (!size || size > 512*1024*1024 || entry >= size || !ns || ns > 64 || nr > 1000000 || import_count > 100000)
         fail("boot file limits exceeded");
     int unwind=!memcmp(magic,"RGIMAGE7",8);
