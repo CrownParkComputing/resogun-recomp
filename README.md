@@ -6,6 +6,11 @@
 
 [![Get on Quiver Launcher](https://img.shields.io/badge/Get_on-Quiver-blue)](https://quiverlauncher.com/apps/resogun-resogun-ps4-recompiled-to-pc)
 
+> **This is a fork** of [rcostanza/resogun-recomp](https://github.com/rcostanza/resogun-recomp), whose
+> authors wrote the recompiler, the runtime and the renderer. It adds installing straight from a PS4
+> `.pkg` and playing a DLC-unlocker-patched eboot. Same licence (GPL-2.0-or-later); please report
+> upstream bugs upstream.
+
 An (obviously) unofficial static recompilation of the PS4 version of <b>Resogun</b>, Housemarque's awesome shmup exclusive to PS platforms.
 
 The game's own x86-64 code runs directly on Windows and Linux: the PS4 system libraries it calls are reimplemented, and its GPU commands are drawn with Vulkan.
