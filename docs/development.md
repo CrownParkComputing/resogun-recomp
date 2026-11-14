@@ -190,16 +190,16 @@ Trophies come from the dump's `sce_sys/trophy/trophy00.trp` (65, TROP000-064); u
 
 ## Release folder and setup
 
-`resogun-setup.exe` (`setup/`) runs `prepare/run.py prepare` into `game/` beside it, rewrites the
+`resogun-setup` (`setup/`) runs `prepare/run.py prepare` into `game/` beside it, rewrites the
 game's instructions for this CPU if needed, writes `settings.ini` from the template when there is
 none, sets its `skip_intro` line from the window's checkbox, and writes `paths.ini` with the game and
 save folders and, when one is chosen, `dlc=`. The command line does the same as the window:
-`resogun-setup.exe --help`.
+`resogun-setup --help`.
 
-Started with no arguments, `resogun.exe` reads `paths.ini` and builds the command line `run.py`
+Started with no arguments, `resogun` reads `paths.ini` and builds the command line `run.py`
 would pass (`src/launcher.c`); without a console its output goes to `log/resogun.log` in the save
-folder. It also watches the game: it starts the same command line as a child (on Windows in a job
-that ends it if the launcher is killed, on Linux by `fork` with `PR_SET_PDEATHSIG`), and when the
+folder. It also watches the game: it starts the same command line as a child (by `fork` with
+`PR_SET_PDEATHSIG`, so it ends if the launcher is killed), and when the
 game ends with an exit code other than 0 it notes the code in the log, copies the log to
 `log/crash-<date>-<time>.log` and says so in a message box. `RESOGUN_CRASH_WATCH=0` turns that off.
 
@@ -223,10 +223,10 @@ the file changes), `RESOGUN_PAD_RECORD` (F9 records the pad) and `RESOGUN_PAD_RE
 |---|---|
 | `src/` | Loader (`loader.c`), launcher (`launcher.c`), the runtime (`runtime_*.c`) and the CPU rewrite (`isa_*.c`) |
 | `gpu/` | shadPS4's video core (`shadps4/`, changes marked `// resogun:`), the shim and overlay around it (`shim/`), CMake build |
-| `build.sh`, `build_windows.ps1`, `build_linux.sh` | The build (`build.sh`) and the local build, test and boot-check wrappers ([building.md](building.md)) |
+| `build.sh`, `build_linux.sh` | The build (`build.sh`) and the local build, test and boot-check wrapper ([building.md](building.md)) |
 | `scripts/` | Building the game image: `prepare.py`, `link.py`, `isa_rewrite.py` |
 | `setup/` | `resogun-setup`, which sets up a release folder from a player's dump |
-| `res/` | The exes' icon, Windows resource script and manifests (`libs.manifest`: the DLL folder) |
+| `res/` | The application icon, used for the desktop entry |
 | `packaging/` | `diagnose/`, the glitch kit the debug package ships |
 | `.github/` | CI (`workflows/build.yml`) and its scripts: `ci-deps.sh` (Linux build dependencies), `smoke-test.sh` (a release on fresh distros) |
 | `tools/` | `package.py` (the release), `name_imports.py` (names NIDs), `image_info.py` (modules and GOT slots), `make_app_icon.py`, `screenshot.ps1` |

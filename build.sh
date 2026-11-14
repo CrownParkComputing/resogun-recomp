@@ -1,26 +1,13 @@
 #!/usr/bin/env bash
-# Builds out/resogun and out/resogun-setup (.exe on Windows): MSYS2 CLANG64 there,
-# clang and the system libraries on Linux (packages in docs/building.md). The GPU library is static
-# and CMake links the loader as well. --test also runs the runtime tests.
+# Builds out/resogun and out/resogun-setup with clang and the system libraries
+# (packages in docs/building.md). The GPU library is static and CMake links the loader as well.
+# --test also runs the runtime tests.
 set -euo pipefail
 cd -- "$(dirname -- "$0")"
 mkdir -p out
-case $(uname -s) in
-MINGW*|MSYS*)
-    # The MSYS2 CLANG64 toolchain first on PATH (MSYS2_ROOT overrides C:/msys64).
-    msys2_root=${MSYS2_ROOT:-/c/msys64}
-    if [[ -d $msys2_root/clang64/bin ]]; then
-        export PATH="$msys2_root/clang64/bin:$msys2_root/usr/bin:$PATH" MSYSTEM=CLANG64
-    fi
-    exe=.exe
-    # The Windows counterparts of the POSIX calls (src/compat_win.h).
-    compat=(src/compat_win.c -lbcrypt) net=(-lws2_32) memory=(-lonecore) cflags=() ;;
-Linux)
-    exe=''
-    # -std=c11 hides POSIX from glibc's headers.
-    compat=() net=() memory=() cflags=(-D_DEFAULT_SOURCE) ;;
-*) echo 'Windows (Git Bash or an MSYS2 shell) or Linux only.' >&2; exit 1 ;;
-esac
+[[ $(uname -s) == Linux ]] || { echo 'Linux only.' >&2; exit 1; }
+# -std=c11 hides POSIX from glibc's headers.
+compat=() net=() memory=() cflags=(-D_DEFAULT_SOURCE)
 targets=(resogun resogun-setup)
 cc=${CC:-clang} cxx=${CXX:-clang++}
 for tool in "$cc" "$cxx" cmake ninja pkg-config make curl; do
@@ -33,11 +20,10 @@ fi
 # another version or options (tools/build_ffmpeg.sh).
 CC="$cc" bash tools/build_ffmpeg.sh out/ffmpeg
 ffmpeg=$PWD/out/ffmpeg
-command -v cygpath >/dev/null && ffmpeg=$(cygpath -m "$ffmpeg")
-# Linux: lld when the compiler finds it (the lld package), which links the runner and the GPU tests
-# much faster than GNU ld. MSYS2 CLANG64 links with lld already.
+# lld when the compiler finds it (the lld package), which links the runner and the GPU tests
+# much faster than GNU ld.
 linker=()
-if [[ -z $exe ]] && echo 'int main(void) { return 0; }' | "$cc" -x c - -fuse-ld=lld -o /dev/null 2>/dev/null; then
+if echo 'int main(void) { return 0; }' | "$cc" -x c - -fuse-ld=lld -o /dev/null 2>/dev/null; then
     linker=(-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld -DCMAKE_SHARED_LINKER_FLAGS=-fuse-ld=lld)
 fi
 cmake -S gpu -B out/gpu -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo "${linker[@]}" \
@@ -46,16 +32,14 @@ if ! ninja -C out/gpu "${targets[@]}" > out/gpu-build.log 2>&1; then
     grep -v '^[[]' out/gpu-build.log | tail -40 >&2
     echo 'Build failed (full log: out/gpu-build.log)' >&2; exit 1
 fi
-for target in "${targets[@]}"; do cp "out/gpu/$target$exe" out/; done
-# resogun.exe's manifest needs libs\libs.manifest beside it (res/libs.manifest).
-[[ -n $exe ]] && mkdir -p out/libs && cp out/gpu/libs/libs.manifest out/libs/
-echo "Built ${targets[*]/%/$exe} in $PWD/out"
+for target in "${targets[@]}"; do cp "out/gpu/$target" out/; done
+echo "Built ${targets[*]} in $PWD/out"
 if [[ ${1:-} == --test ]]; then
     # run_test <name> <source> [extra flags...]: builds out/<name>-test and runs it.
     run_test() {
         local name=$1 source=$2; shift 2
-        "$cc" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread "${cflags[@]}" -I. -Isrc "$source" "$@" -o "out/$name-test$exe"
-        "out/$name-test$exe"
+        "$cc" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread "${cflags[@]}" -I. -Isrc "$source" "$@" -o "out/$name-test"
+        "out/$name-test"
     }
     run_test services tests/test_services.c "${compat[@]}"
     run_test savedata tests/test_savedata.c "${compat[@]}"
@@ -82,7 +66,7 @@ if [[ ${1:-} == --test ]]; then
     for test in "${gpu_tests[@]}"; do
         args=()
         [[ $test == isa-stub-test ]] && args=(tests/data/isa_fixture.bin)
-        if ! "out/gpu/$test$exe" "${args[@]}" > "out/$test.log" 2>&1; then
+        if ! "out/gpu/$test" "${args[@]}" > "out/$test.log" 2>&1; then
             tail -20 "out/$test.log" >&2
             echo "$test failed (log: out/$test.log)" >&2; exit 1
         fi

@@ -151,7 +151,8 @@ class LoaderTests(unittest.TestCase):
         self.assertIn('_init_env=0',r.stdout)
 
     def test_unknown_capabilities_rejected(self):
-        r = self.run_image(package(b'\xc3',capabilities=2))
+        # Bit 0 is the native libc, bit 1 the DLC unlocker's AppContent reference; bit 2 is not one.
+        r = self.run_image(package(b'\xc3',capabilities=4))
         self.assertEqual(r.returncode,1)
         self.assertIn('unknown runtime capabilities',r.stderr)
 

@@ -1,6 +1,6 @@
 # Resogun PC runner
 
-Native Windows and Linux runner for the PS4 version of Resogun (CUSA00038, v1.10, SDK 4.008; Housemarque's
+Native Linux runner for the PS4 version of Resogun (CUSA00038, v1.10, SDK 4.008; Housemarque's
 own engine, statically linked into eboot.bin, with Wwise audio in audio.pck and data in stream.dat).
 The game's x86-64 code runs directly; PS4 system calls are reimplemented in C and GNM rendering goes
 through shadPS4's video core on Vulkan. See [docs/development.md](docs/development.md) for the
@@ -9,12 +9,12 @@ are in the repository, and nothing assumes where the decrypted dump is: set `RES
 to it (or pass `--game DIR` to `run.py`). Tests that need it skip without it.
 
 ## Loop
-- Build: `bash build.sh` (Git Bash on Windows, where it puts MSYS2 CLANG64 on PATH itself; or Linux).
+- Build: `bash build.sh` (Linux; this fork is Linux only).
 - Run: `python run.py --timeout 20`; read the first `STOP:` or `Fault:` line.
 - Missing imports: `python run.py check` (full list in `out/game/missing-imports.txt`).
 - Tests: `bash build.sh --test` (runtime C tests and every CMake `*-test`), then
-  `cd tests && python -m unittest discover -p "test_*.py"`. `build_windows.ps1 -Test -Run` /
-  `build_linux.sh --test --run` do the build, both suites and a boot check in one go.
+  `cd tests && python -m unittest discover -p "test_*.py"`. `build_linux.sh --test --run` does
+  the build, both suites and a boot check in one go.
 
 ## Conventions
 - Names are Resogun's: identifiers, files, env variables (`RESOGUN_*`), log prefixes and
@@ -33,8 +33,6 @@ to it (or pass `--game DIR` to `run.py`). Tests that need it skip without it.
   changes there need a boot check (`python run.py --timeout 20`).
 - Releases are built by `tools/package.py` and must work from the unpacked zip alone: no repo, no
   MSYS2, no Python of the player's own. Never package game files or anything built from a dump.
-- Python edits on Windows: write files with LF line endings (`write_bytes`, or
-  `open(path, 'w', newline='')`): text mode would turn the tree's LF into CRLF.
 - The DLC dumps are 22 entitlement-only add-ons (ships and skins; each folder holds only sce_sys,
   no data), so DLC means sceAppContent reporting them as installed, not serving files.
 - The engine takes its own command-line switches (strings in the eboot: `-nosplash`, `-no_video`,

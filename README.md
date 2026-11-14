@@ -13,7 +13,7 @@
 
 An (obviously) unofficial static recompilation of the PS4 version of <b>Resogun</b>, Housemarque's awesome shmup exclusive to PS platforms.
 
-The game's own x86-64 code runs directly on Windows and Linux: the PS4 system libraries it calls are reimplemented, and its GPU commands are drawn with Vulkan.
+The game's own x86-64 code runs directly on Linux: the PS4 system libraries it calls are reimplemented, and its GPU commands are drawn with Vulkan.
 
 🚨 **No game files are included** 🚨
 
@@ -37,11 +37,11 @@ This requires you to provide the `.pkg` of your own copy of the game (or a decry
 
 ## Requirements
 
-- **Windows:** Windows 10 or 11, 64-bit. Python and everything else comes with the release.
-- **Linux:** x86-64 with glibc 2.39 or newer (SteamOS 3.7, Ubuntu 24.04, Debian 13, Fedora 40 or
-  newer, Arch) and Python 3.10 or newer (`python3`) for the setup.
-- A CPU with AVX.
-- A GPU with Vulkan 1.3 and a current driver (on Linux, Mesa or the NVIDIA driver).
+- **Linux x86-64**, glibc 2.39 or newer (SteamOS 3.7, Ubuntu 24.04, Debian 13, Fedora 40 or
+  newer, Arch), and Python 3.10 or newer (`python3`) for the setup. This fork is Linux only; the
+  upstream project also builds for Windows.
+- A CPU with AVX. The PS4's own x86-64 code runs directly, so an ARM machine cannot run it.
+- A GPU with Vulkan 1.3 and a current driver (Mesa or the NVIDIA driver).
 - The `.pkg` of your own copy of the game. Setup extracts it into a folder next to it, which
   takes a few seconds and about 700 MB. A dump you have already extracted works too: the folder
   with `eboot.bin`, `sce_module`, `sce_sys`, `audio.pck` and `stream.dat`.
@@ -50,26 +50,25 @@ A higher frame rate needs a PC that holds it: Resogun's game speed follows the f
 
 ## Install and play
 
-1. [Download the latest release here](https://github.com/rcostanza/resogun-recomp/releases/latest)
-2. Unzip the release anywhere, for example `C:\Games\Resogun`.
-3. Run `resogun-setup.exe`.
-4. **Browse...** to your game's `.pkg` (or **Folder...** for a dump you have already extracted), optionally a **DLC folder**, and a **save folder** (by default `save` inside the release folder). Each row says whether what you chose is usable, and **Install** turns on once the game row is happy (and the DLC folder exists, if you named one). Press it: setup extracts the `.pkg` next to itself if you gave one, then prepares the game in a few seconds and offers a desktop shortcut. Your `.pkg` and your dumps are only read, never changed.
-5. Press **Play Game**. Later, start `resogun.exe` or the shortcut.
+1. [Download the latest release here](https://github.com/CrownParkComputing/resogun-recomp/releases/latest)
+2. Extract it anywhere you can write: `tar -xzf resogun-pc-<version>-linux.tar.gz -C ~/Games`
+3. Run `resogun-setup`: from a file manager it asks with dialogs, in a terminal it asks there. It
+   also takes `--game <pkg or dump> [--save <folder>] [--dlc <folder>]`.
+4. Choose your game's **`.pkg`** (or a dump you have already extracted), optionally a **DLC
+   folder**, and a **save folder**. It extracts the `.pkg` next to itself, prepares the game in a
+   few seconds and offers an entry in your application menu. Your `.pkg` and your dumps are only
+   read, never changed.
+5. Start the game from the menu entry, or run `./resogun`.
 
-Run `resogun-setup.exe` again any time to change folders; it offers to copy your saves when the save folder moves. Untick **Skip the intro logos** there (or set `skip_intro=0` in `settings.ini`) to see the logos and the title screen again.
-
-### On Linux
-
-1. Extract the release anywhere you can write: `tar -xzf resogun-pc-<version>-linux.tar.gz -C ~/Games`
-2. Run `resogun-setup`: from a file manager it asks with dialogs, in a terminal it asks there. It also
-   takes `--game <pkg or dump> [--save <folder>] [--dlc <folder>]`.
-3. Start the game from the menu entry it adds, or run `./resogun`.
+Run `resogun-setup` again any time to change folders; it offers to copy your saves when the save
+folder moves. Turn off **Skip the intro logos** (or set `skip_intro=0` in `settings.ini`) to see
+the logos and the title screen again.
 
 On a Steam Deck, do this in Desktop Mode; _Add a Non-Steam Game_ in Steam then lists the menu entry.
 
 ### Updating
 
-Unzip the new release over the old folder and run the setup once more (the game asks you to). Your folders, saves and settings are kept. Setup also remembers the folders in `%APPDATA%\Resogun\paths.ini` (Linux: `~/.config/resogun/paths.ini`), so a release unzipped somewhere new only needs **Install**.
+Extract the new release over the old folder and run the setup once more (the game asks you to). Your folders, saves and settings are kept. Setup also remembers the folders in `~/.config/resogun/paths.ini`, so a release extracted somewhere new only needs **Install**.
 
 ### DLC
 
@@ -93,7 +92,7 @@ Resogun's add-ons (the extra ships and skins) carry no data of their own: the ga
 - frame rate: 30, 60, 90, 120, 144 or 180 (30 for PCs that cannot hold 60), held to what your display refreshes at (180 on a 120 Hz display runs at 120) unless VSync is off with tearing allowed;
 - render resolution (4K or 1080p, at the next start);
 - sharpening (AMD FSR 1 RCAS, on by default), applied at once; **F9** also switches it over the game, to compare;
-- HDR, the game's own HDR output on an HDR display (at the next start; on Windows, turn on **Use HDR** in Display settings first).
+- HDR, the game's own HDR output on an HDR display (at the next start).
 
 `title_back_exits=0` stops Back on the title screen from asking to close the game.
 

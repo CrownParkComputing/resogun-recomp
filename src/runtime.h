@@ -2,15 +2,7 @@
 #define RESOGUN_RUNTIME_H
 #include <stdint.h>
 #include <stddef.h>
-#ifdef _WIN32
-#include "compat_win.h"
-/* No signals on Windows: the exception handler resumes the thread in resogun_longjmp
- * (gpu/shim/resogun_toggles.h uses the same buffer type). */
-typedef resogun_jmp_buf sigjmp_buf;
-#define sigsetjmp(buffer, save) resogun_setjmp(buffer)
-#else
 #include <setjmp.h>
-#endif
 /* Recovery point for speculative guest memory reads on this thread (loader.c fault handler). */
 extern __thread sigjmp_buf *runtime_fault_recover;
 /* Restarts the game (in-game settings menu, render resolution change). */

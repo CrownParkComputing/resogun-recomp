@@ -9,13 +9,13 @@
     "check": { "file": "stream.dat" }
   },
   "prepare": {
-    "program": ["resogun-setup.exe", "resogun-setup"],
+    "program": ["resogun-setup"],
     "args": ["--game", "{game}", "--save", "{install}/save", "--copy-saves", "--progress"],
     "label": "The game, prepared from your dump",
     "timeout": 600
   },
   "start": {
-    "program": ["resogun.exe", "resogun"]
+    "program": ["resogun"]
   },
   "config": [
     {

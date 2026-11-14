@@ -34,9 +34,7 @@ endif()
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(XXHASH REQUIRED IMPORTED_TARGET libxxhash)
 pkg_check_modules(SDL3 REQUIRED IMPORTED_TARGET sdl3)
-if (NOT WIN32)
-    pkg_check_modules(X11 REQUIRED IMPORTED_TARGET x11)
-endif()
+pkg_check_modules(X11 REQUIRED IMPORTED_TARGET x11)
 find_package(miniz QUIET)
 if (NOT miniz_FOUND)
     set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -150,81 +148,45 @@ target_compile_options(resogun_gpu PRIVATE -Wno-deprecated-declarations -Wno-mis
 target_link_libraries(resogun_gpu PUBLIC Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum
     tsl::robin_map GPUOpen::VulkanMemoryAllocator PkgConfig::XXHASH PkgConfig::SDL3 Resogun::FFmpeg miniz::miniz Zydis::Zydis sirit)
 target_include_directories(resogun_gpu PRIVATE third_party/xbyak)
-if (WIN32)
-    # Guest code is entered with the System V ABI; NOMINMAX/WIN32_LEAN_AND_MEAN keep
-    # <windows.h> out of the way of std::min/max and the Vulkan/SDL headers.
-    target_compile_definitions(resogun_gpu PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
-    target_compile_options(resogun_gpu PRIVATE -include ${CMAKE_CURRENT_SOURCE_DIR}/shim/resogun_win_compat.h)
-    target_link_libraries(resogun_gpu PUBLIC Vulkan::Vulkan ws2_32 bcrypt ntdll synchronization winmm pdh dxgi dwmapi)
-else()
-    target_link_libraries(resogun_gpu PUBLIC PkgConfig::X11 Vulkan::Vulkan)
-endif()
+target_link_libraries(resogun_gpu PUBLIC PkgConfig::X11 Vulkan::Vulkan)
 
 # resogun: the loader and the HLE runtime, linked with resogun_gpu here, where CMake knows
 # its dependencies (build.sh builds them with ninja).
-# The Windows counterparts of the POSIX calls (src/compat_win.h) and their libraries.
-if (WIN32)
-    set(RESOGUN_COMPAT ../src/compat_win.c)
-    set(RESOGUN_COMPAT_LIBS bcrypt)
-else()
-    set(RESOGUN_COMPAT "")
-    set(RESOGUN_COMPAT_LIBS "")
-    # -std=c11 hides POSIX from glibc's headers (sigjmp_buf in runtime.h, among others).
-    add_compile_options($<$<COMPILE_LANGUAGE:C>:-D_DEFAULT_SOURCE>)
-endif()
+
+# -std=c11 hides POSIX from glibc's headers (sigjmp_buf in runtime.h, among others).
+add_compile_options($<$<COMPILE_LANGUAGE:C>:-D_DEFAULT_SOURCE>)
 file(GLOB RESOGUN_RUNTIME CONFIGURE_DEPENDS ../src/runtime*.c)
 # isa_emulate runs inside guest code: no XMM/YMM.
 set_source_files_properties(../src/isa_emulate.c PROPERTIES COMPILE_OPTIONS "-mgeneral-regs-only")
-add_executable(resogun ../src/loader.c ${RESOGUN_RUNTIME} ${RESOGUN_COMPAT} ../src/cpu_check.c
+add_executable(resogun ../src/loader.c ${RESOGUN_RUNTIME} ../src/cpu_check.c
     ../src/vulkan_smoke.c ../src/isa_rewrite.c ../src/isa_emulate.c ../src/launcher.c)
 set_target_properties(resogun PROPERTIES C_STANDARD 11 C_EXTENSIONS OFF)
 target_compile_options(resogun PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wall -Wextra -Werror>)
 target_include_directories(resogun PRIVATE .. ../src)
 target_link_libraries(resogun PRIVATE resogun_gpu -pthread)
-if (WIN32)
-    enable_language(RC)
-    target_sources(resogun PRIVATE ../res/resogun.rc)
-    target_link_libraries(resogun PRIVATE onecore bcrypt ws2_32)
-    # The PS4 range (64 GiB - 1 TiB) must stay free: no high-entropy ASLR for heaps and stacks.
-    # The guest main thread runs on the process stack: 16 MiB, committed (no stack probes).
-    target_link_options(resogun PRIVATE -Wl,--disable-high-entropy-va "SHELL:-Xlinker --stack -Xlinker 16777216,16777216")
-    # Its manifest names the libs assembly (res/libs.manifest), which must sit beside it: libs/.
-    set_property(SOURCE ../res/resogun.rc APPEND PROPERTY OBJECT_DEPENDS
-        ${CMAKE_CURRENT_SOURCE_DIR}/../res/resogun.manifest ${CMAKE_CURRENT_SOURCE_DIR}/../res/resogun.ico)
-    add_custom_command(TARGET resogun POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${CMAKE_CURRENT_SOURCE_DIR}/../res/libs.manifest $<TARGET_FILE_DIR:resogun>/libs/libs.manifest)
-    # resogun-setup.exe (setup/): sets up a release folder (tools/package.py) from a player's dump.
-    # Linked statically, so it starts without the MSYS2 DLLs.
-    add_executable(resogun-setup WIN32 ../setup/main.cpp ../setup/setup.cpp ../setup/pkgdec.cpp
-                              ../setup/setup.rc)
-    target_compile_definitions(resogun-setup PRIVATE UNICODE _UNICODE)
-    target_link_options(resogun-setup PRIVATE -municode -static)
-    target_link_libraries(resogun-setup PRIVATE comctl32 ole32 shell32 uuid gdi32 msimg32 dwmapi)
-else()
-    # Not PIE: host heap objects handed to the guest stay in the brk heap, below 1 TiB (loader.c main).
-    set_target_properties(resogun PROPERTIES POSITION_INDEPENDENT_CODE OFF)
-    target_link_options(resogun PRIVATE -no-pie)
-    target_link_libraries(resogun PRIVATE ${CMAKE_DL_LIBS} m)
-    # resogun-setup (setup/): the same install, asking in a terminal or with the desktop's dialogs (SDL).
-    add_executable(resogun-setup ../setup/main_linux.cpp ../setup/setup.cpp ../setup/pkgdec.cpp)
-    target_link_libraries(resogun-setup PRIVATE PkgConfig::SDL3)
-endif()
+# Not PIE: host heap objects handed to the guest stay in the brk heap, below 1 TiB (loader.c main).
+set_target_properties(resogun PROPERTIES POSITION_INDEPENDENT_CODE OFF)
+target_link_options(resogun PRIVATE -no-pie)
+target_link_libraries(resogun PRIVATE ${CMAKE_DL_LIBS} m)
+# resogun-setup (setup/): the same install, asking in a terminal or with the desktop's dialogs (SDL).
+add_executable(resogun-setup ../setup/main_linux.cpp ../setup/setup.cpp ../setup/pkgdec.cpp)
+target_link_libraries(resogun-setup PRIVATE PkgConfig::SDL3)
 # resogun: runtime and renderer unit tests (bash build.sh --test builds and runs every *-test).
-add_executable(audio-test EXCLUDE_FROM_ALL ../tests/test_audio.c ${RESOGUN_COMPAT})
+add_executable(audio-test EXCLUDE_FROM_ALL ../tests/test_audio.c)
 set_target_properties(audio-test PROPERTIES C_STANDARD 11 C_EXTENSIONS OFF)
 target_compile_options(audio-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 target_include_directories(audio-test PRIVATE .. ../src)
-target_link_libraries(audio-test PRIVATE PkgConfig::SDL3 ${RESOGUN_COMPAT_LIBS} -pthread)
-add_executable(pad-test EXCLUDE_FROM_ALL ../tests/test_pad.c ${RESOGUN_COMPAT})
+target_link_libraries(audio-test PRIVATE PkgConfig::SDL3 -pthread)
+add_executable(pad-test EXCLUDE_FROM_ALL ../tests/test_pad.c)
 set_target_properties(pad-test PROPERTIES C_STANDARD 11 C_EXTENSIONS OFF)
 target_compile_options(pad-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 target_include_directories(pad-test PRIVATE .. ../src)
-target_link_libraries(pad-test PRIVATE PkgConfig::SDL3 ${RESOGUN_COMPAT_LIBS} -pthread)
-add_executable(audio-downmix-test EXCLUDE_FROM_ALL ../tests/test_audio_downmix.c ${RESOGUN_COMPAT})
+target_link_libraries(pad-test PRIVATE PkgConfig::SDL3 -pthread)
+add_executable(audio-downmix-test EXCLUDE_FROM_ALL ../tests/test_audio_downmix.c)
 set_target_properties(audio-downmix-test PROPERTIES C_STANDARD 11 C_EXTENSIONS OFF)
 target_compile_options(audio-downmix-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 target_include_directories(audio-downmix-test PRIVATE .. ../src)
-target_link_libraries(audio-downmix-test PRIVATE PkgConfig::SDL3 ${RESOGUN_COMPAT_LIBS} -pthread)
+target_link_libraries(audio-downmix-test PRIVATE PkgConfig::SDL3 -pthread)
 add_executable(cpu-check-test EXCLUDE_FROM_ALL ../tests/test_cpu_check.c)
 set_target_properties(cpu-check-test PROPERTIES C_STANDARD 11 C_EXTENSIONS OFF)
 target_compile_options(cpu-check-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
@@ -241,49 +203,26 @@ set_source_files_properties(../tests/test_isa_stub.c PROPERTIES COMPILE_OPTIONS 
 set_target_properties(isa-stub-test PROPERTIES C_STANDARD 11 C_EXTENSIONS OFF)
 target_compile_options(isa-stub-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 target_include_directories(isa-stub-test PRIVATE .. ../src)
-target_link_libraries(isa-stub-test PRIVATE ${RESOGUN_COMPAT_LIBS} -pthread)
-add_executable(tsc-clock-test EXCLUDE_FROM_ALL ../tests/test_tsc_clock.c ${RESOGUN_COMPAT})
+target_link_libraries(isa-stub-test PRIVATE -pthread)
+add_executable(tsc-clock-test EXCLUDE_FROM_ALL ../tests/test_tsc_clock.c)
 set_target_properties(tsc-clock-test PROPERTIES C_STANDARD 11 C_EXTENSIONS OFF)
 target_compile_options(tsc-clock-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 target_include_directories(tsc-clock-test PRIVATE .. ../src)
-target_link_libraries(tsc-clock-test PRIVATE ${RESOGUN_COMPAT_LIBS} -pthread)
-if (WIN32)
-    # Memory another program holds in the PS4 range at start-up.
-    add_executable(memory-reserve-test EXCLUDE_FROM_ALL ../tests/test_memory_reserve.c ../src/compat_win.c)
-    set_target_properties(memory-reserve-test PROPERTIES C_STANDARD 11 C_EXTENSIONS OFF)
-    target_compile_options(memory-reserve-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
-    target_include_directories(memory-reserve-test PRIVATE .. ../src)
-    target_link_libraries(memory-reserve-test PRIVATE onecore bcrypt -pthread)
-    target_link_options(memory-reserve-test PRIVATE -Wl,--disable-high-entropy-va)
-endif()
+target_link_libraries(tsc-clock-test PRIVATE -pthread)
 
 # Explicit test targets; neither launches the game nor needs a Vulkan device.
 add_executable(pipeline-binary-cache-test EXCLUDE_FROM_ALL ../tests/test_pipeline_binary_cache.cpp
     ../tests/test_gpu_runtime_stubs.cpp)
-target_compile_definitions(pipeline-binary-cache-test PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_compile_definitions(pipeline-binary-cache-test PRIVATE NOMINMAX)
 target_include_directories(pipeline-binary-cache-test PRIVATE shim shadps4)
 target_link_libraries(pipeline-binary-cache-test PRIVATE resogun_gpu)
 target_compile_options(pipeline-binary-cache-test PRIVATE -fPIC)
-if (WIN32)
-    target_sources(pipeline-binary-cache-test PRIVATE ../src/compat_win.c)
-    target_compile_definitions(pipeline-binary-cache-test PRIVATE sigjmp_buf=resogun_jmp_buf)
-    target_compile_options(pipeline-binary-cache-test PRIVATE
-        -include ${CMAKE_CURRENT_SOURCE_DIR}/../src/compat_win.h)
-    target_link_libraries(pipeline-binary-cache-test PRIVATE onecore)
-endif()
 add_executable(pipeline-binary-initialization-test EXCLUDE_FROM_ALL
     ../tests/test_pipeline_binary_initialization.cpp ../tests/test_gpu_runtime_stubs.cpp)
-target_compile_definitions(pipeline-binary-initialization-test PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_compile_definitions(pipeline-binary-initialization-test PRIVATE NOMINMAX)
 target_include_directories(pipeline-binary-initialization-test PRIVATE shim shadps4)
 target_link_libraries(pipeline-binary-initialization-test PRIVATE resogun_gpu)
 target_compile_options(pipeline-binary-initialization-test PRIVATE -fPIC)
-if (WIN32)
-    target_sources(pipeline-binary-initialization-test PRIVATE ../src/compat_win.c)
-    target_compile_definitions(pipeline-binary-initialization-test PRIVATE sigjmp_buf=resogun_jmp_buf)
-    target_compile_options(pipeline-binary-initialization-test PRIVATE
-        -include ${CMAKE_CURRENT_SOURCE_DIR}/../src/compat_win.h)
-    target_link_libraries(pipeline-binary-initialization-test PRIVATE onecore)
-endif()
 set_source_files_properties(../tests/test_pipeline_binary_cache.cpp PROPERTIES
     COMPILE_OPTIONS "-fvisibility=hidden;-fvisibility-inlines-hidden")
 add_executable(png-decode-test EXCLUDE_FROM_ALL ../tests/test_png_decode.cpp shim/resogun_png.cpp)
@@ -292,9 +231,6 @@ target_link_libraries(png-decode-test PRIVATE Resogun::FFmpeg)
 # The AES-128 and XTS of the setup (setup/pkgdec.cpp): the test includes the file itself.
 add_executable(pkgdec-test EXCLUDE_FROM_ALL ../tests/test_pkgdec.cpp ../setup/setup.cpp)
 target_compile_options(pkgdec-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
-if (WIN32)
-    target_link_libraries(pkgdec-test PRIVATE comctl32 ole32 shell32 uuid gdi32 msimg32 dwmapi)
-endif()
 add_executable(aliasing-test EXCLUDE_FROM_ALL ../tests/test_aliasing.cpp
     shadps4/video_core/texture_cache/aliasing.cpp shadps4/video_core/texture_cache/host_compatibility.cpp)
 target_compile_options(aliasing-test PRIVATE -UNDEBUG)
@@ -349,7 +285,6 @@ target_link_libraries(depth-stencil-state-test PRIVATE Vulkan::Headers fmt::fmt 
 
 # The test's Vulkan-Hpp inline methods have a different set of platform extensions
 # from vk_platform.cpp. Keep them local and use an explicit dispatcher in the test.
-
 
 add_executable(readback-queue-test EXCLUDE_FROM_ALL ../tests/test_readback_queue.cpp)
 target_include_directories(readback-queue-test PRIVATE shadps4)

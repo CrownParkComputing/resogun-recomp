@@ -44,16 +44,10 @@ constexpr const wchar_t* kSaveFolders[] = {L"savedata"};
 
 using Log = std::function<void(const std::wstring&)>;
 
-#ifdef _WIN32
-constexpr wchar_t kGameExe[] = L"resogun.exe";
-constexpr wchar_t kSetupExe[] = L"resogun-setup.exe";
-constexpr wchar_t kShortcutName[] = L"Resogun.lnk";
-#else
 constexpr wchar_t kGameExe[] = L"resogun";
 constexpr wchar_t kSetupExe[] = L"resogun-setup";
 // A desktop entry (freedesktop.org), in the application menu or on the Desktop.
 constexpr wchar_t kShortcutName[] = L"resogun.desktop";
-#endif
 
 // A path as text for the user and paths.ini, and text back as a path. Linux paths are UTF-8 bytes,
 // which these convert without depending on the locale.
@@ -100,9 +94,7 @@ std::filesystem::path install(const Options& opt, const Log& log);
 void create_shortcut(const std::filesystem::path& target, const std::filesystem::path& lnk);
 // The user's Desktop folder. Throws Error.
 std::filesystem::path desktop_folder();
-#ifndef _WIN32
 // Where desktop entries go to show up in the application menu (and Steam's "Add a Non-Steam Game").
 std::filesystem::path applications_folder();
-#endif
 
 } // namespace setup

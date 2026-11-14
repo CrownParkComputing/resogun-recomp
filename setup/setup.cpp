@@ -1,17 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "setup.h"
 
-#ifdef _WIN32
-#include <windows.h>
-#include <shlobj.h>
-#include <shobjidl.h>
-#else
 #include <fcntl.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <cerrno>
 #include <cstdlib>
-#endif
 
 #include <cwctype>
 #include <fstream>
@@ -39,13 +33,8 @@ constexpr const wchar_t* kGameFiles[] = {
     L"sce_module/libSceFios2.prx",
 };
 constexpr wchar_t kIncomplete[] = L"\n\nThis folder is incomplete: unpack the whole release again.";
-#ifdef _WIN32
-constexpr wchar_t kSeparator[] = L"\\";
-constexpr char kNewline[] = "\r\n";
-#else
 constexpr wchar_t kSeparator[] = L"/";
 constexpr char kNewline[] = "\n";
-#endif
 
 [[noreturn]] void fail(std::wstring message) {
     throw Error{std::move(message)};
@@ -62,10 +51,6 @@ fs::path clean(const fs::path& p) {
 
 // Windows paths are case-insensitive; Linux paths are not.
 std::wstring lower(std::wstring s) {
-#ifdef _WIN32
-    for (wchar_t& c : s)
-        c = static_cast<wchar_t>(std::towlower(c));
-#endif
     return s;
 }
 
@@ -126,85 +111,6 @@ private:
     std::string pending_;
 };
 
-#ifdef _WIN32
-// One argument as CommandLineToArgvW reads it back.
-std::wstring quote(const std::wstring& arg) {
-    if (!arg.empty() && arg.find_first_of(L" \t\"") == std::wstring::npos)
-        return arg;
-    std::wstring q = L"\"";
-    size_t slashes = 0;
-    for (wchar_t c : arg) {
-        if (c == L'\\') {
-            ++slashes;
-            continue;
-        }
-        q.append(c == L'"' ? slashes * 2 + 1 : slashes, L'\\');
-        slashes = 0;
-        q += c;
-    }
-    q.append(slashes * 2, L'\\');
-    return q + L"\"";
-}
-
-// Runs `args` in `cwd` without a console window and passes each line it prints to `log`.
-// Returns the exit code; `output` (if given) collects the text.
-unsigned long run(const std::vector<std::wstring>& args, const fs::path& cwd, const Log& log, std::wstring* output = nullptr) {
-    std::wstring line;
-    for (const std::wstring& a : args)
-        line += (line.empty() ? L"" : L" ") + quote(a);
-    SECURITY_ATTRIBUTES sa = {sizeof(sa), nullptr, TRUE};
-    HANDLE read = nullptr, write = nullptr;
-    if (!CreatePipe(&read, &write, &sa, 0))
-        fail(L"cannot start " + args[0]);
-    SetHandleInformation(read, HANDLE_FLAG_INHERIT, 0);
-    STARTUPINFOW si = {};
-    si.cb = sizeof(si);
-    si.dwFlags = STARTF_USESTDHANDLES;
-    si.hStdOutput = write;
-    si.hStdError = write;
-    PROCESS_INFORMATION pi = {};
-    BOOL started = CreateProcessW(nullptr, line.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr,
-                                  cwd.c_str(), &si, &pi);
-    CloseHandle(write);
-    if (!started) {
-        CloseHandle(read);
-        fail(L"cannot start " + line);
-    }
-    LineSink sink(log, output);
-    char buf[4096];
-    DWORD n;
-    while (ReadFile(read, buf, sizeof(buf), &n, nullptr) && n)
-        sink.add(buf, n);
-    sink.finish();
-    CloseHandle(read);
-    WaitForSingleObject(pi.hProcess, INFINITE);
-    DWORD code = 1;
-    GetExitCodeProcess(pi.hProcess, &code);
-    CloseHandle(pi.hProcess);
-    CloseHandle(pi.hThread);
-    return code;
-}
-
-fs::path search_path(const wchar_t* name) {
-    wchar_t buf[MAX_PATH * 4];
-    DWORD n = SearchPathW(nullptr, name, nullptr, static_cast<DWORD>(std::size(buf)), buf, nullptr);
-    return n && n < std::size(buf) ? fs::path(std::wstring(buf, n)) : fs::path();
-}
-
-// The Python that runs prepare\run.py: the release's own (prepare\python, the python.org embeddable
-// package), else the player's: the py launcher, else python.exe (not the Store's WindowsApps alias).
-std::vector<std::wstring> python_command(const fs::path& prepare) {
-    std::error_code ec;
-    if (fs::path own = prepare / L"python" / L"python.exe"; fs::is_regular_file(own, ec))
-        return {own.wstring()};
-    if (fs::path py = search_path(L"py.exe"); !py.empty())
-        return {py.wstring(), L"-3"};
-    if (fs::path python = search_path(L"python.exe");
-        !python.empty() && lower(python.wstring()).find(L"\\windowsapps\\") == std::wstring::npos)
-        return {python.wstring()};
-    fail(L"Setup needs Python 3.10 or newer to prepare the game. Install it from python.org, then run setup again.");
-}
-#else
 // Runs `args` in `cwd` and passes each line it prints to `log`. Returns the exit code (128 + the
 // signal when it was killed); `output` (if given) collects the text.
 unsigned long run(const std::vector<std::wstring>& args, const fs::path& cwd, const Log& log, std::wstring* output = nullptr) {
@@ -273,7 +179,6 @@ std::vector<std::wstring> python_command(const fs::path& prepare) {
     fail(L"Setup needs Python 3.10 or newer to prepare the game. Install python3 with your distribution's "
          L"package manager, then run setup again.");
 }
-#endif
 
 // --- paths.ini ----------------------------------------------------------------------------------
 
@@ -286,11 +191,7 @@ std::wstring strip(const std::wstring& s) {
 }
 
 void write_paths(const fs::path& ini, const fs::path& game, const fs::path& save, const fs::path& dlc) {
-#ifdef _WIN32
-    const std::string setup = "resogun-setup.exe", cache = "%LOCALAPPDATA%\\Resogun";
-#else
     const std::string setup = "resogun-setup", cache = "~/.cache/resogun";
-#endif
     const std::string nl = kNewline;
     write_text(ini, "; Written by " + setup + ". Run it again to change these folders." + nl +
                     "; game: your dump (eboot.bin, sce_module, sce_sys, stream.dat). It is only ever read." + nl +
@@ -359,7 +260,6 @@ void write_setting(const fs::path& ini, const std::wstring& key, const std::wstr
     write_text(ini, out);
 }
 
-#ifndef _WIN32
 // A desktop entry's quoted argument: ", `, $ and \ escaped inside the quotes, \ doubled again for
 // the string value itself, and % doubled (field codes).
 std::string desktop_quote(const std::string& arg) {
@@ -382,33 +282,9 @@ fs::path home() {
     const char* h = std::getenv("HOME");
     return h && h[0] ? fs::path(h) : fs::current_path();
 }
-#endif
 
 } // namespace
 
-#ifdef _WIN32
-std::wstring widen(std::string_view s) {
-    int n = MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), nullptr, 0);
-    std::wstring w(n, L'\0');
-    MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), w.data(), n);
-    return w;
-}
-
-std::string narrow(std::wstring_view s) {
-    int n = WideCharToMultiByte(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), nullptr, 0, nullptr, nullptr);
-    std::string u(n, '\0');
-    WideCharToMultiByte(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), u.data(), n, nullptr, nullptr);
-    return u;
-}
-
-std::wstring text(const fs::path& p) {
-    return p.wstring();
-}
-
-fs::path path_of(const std::wstring& s) {
-    return fs::path(s);
-}
-#else
 // UTF-8 to UTF-32 (wchar_t); a malformed byte becomes U+FFFD.
 std::wstring widen(std::string_view s) {
     std::wstring w;
@@ -463,18 +339,11 @@ std::wstring text(const fs::path& p) {
 fs::path path_of(const std::wstring& s) {
     return fs::path(narrow(s));
 }
-#endif
 
 fs::path exe_folder() {
-#ifdef _WIN32
-    wchar_t buf[MAX_PATH * 4];
-    DWORD n = GetModuleFileNameW(nullptr, buf, static_cast<DWORD>(std::size(buf)));
-    return fs::path(std::wstring(buf, n)).parent_path();
-#else
     std::error_code ec;
     fs::path exe = fs::read_symlink("/proc/self/exe", ec);
     return ec ? fs::current_path() : exe.parent_path();
-#endif
 }
 
 bool same_path(const fs::path& a, const fs::path& b) {
@@ -506,13 +375,8 @@ std::vector<std::wstring> missing_game_files(const fs::path& game) {
 }
 
 fs::path user_paths_ini() {
-#ifdef _WIN32
-    const wchar_t* appdata = _wgetenv(L"APPDATA");
-    return appdata && appdata[0] ? fs::path(appdata) / L"Resogun" / L"paths.ini" : fs::path();
-#else
     const char* config = std::getenv("XDG_CONFIG_HOME");
     return (config && config[0] ? fs::path(config) : home() / ".config") / "resogun" / "paths.ini";
-#endif
 }
 
 namespace {
@@ -653,11 +517,7 @@ fs::path install(const Options& opt, const Log& log) {
     std::vector<std::wstring> command = python;
     command.insert(command.end(), {text(prepare / L"run.py"), L"prepare", L"--game", text(game),
                                    L"--out", text(image)});
-#ifdef _WIN32
-    SetEnvironmentVariableW(L"PYTHONIOENCODING", L"utf-8");
-#else
     setenv("PYTHONIOENCODING", "utf-8", 1);
-#endif
     // Exit code 3: eboot.bin is not one of the builds scripts/prepare.py lists as verified, and nothing
     // was prepared. The player is warned, and on going on it is prepared anyway (--any-build).
     unsigned long code = run(command, prepare, log);
@@ -748,45 +608,6 @@ fs::path install(const Options& opt, const Log& log) {
     return exe;
 }
 
-#ifdef _WIN32
-void create_shortcut(const fs::path& target, const fs::path& lnk) {
-    HRESULT init = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-    IShellLinkW* link = nullptr;
-    IPersistFile* file = nullptr;
-    HRESULT hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&link));
-    if (SUCCEEDED(hr)) {
-        link->SetPath(target.c_str());
-        link->SetWorkingDirectory(target.parent_path().c_str());
-        link->SetIconLocation(target.c_str(), 0);
-        link->SetDescription(L"Resogun");
-        hr = link->QueryInterface(IID_PPV_ARGS(&file));
-    }
-    if (SUCCEEDED(hr))
-        hr = file->Save(lnk.c_str(), TRUE);
-    if (file)
-        file->Release();
-    if (link)
-        link->Release();
-    if (SUCCEEDED(init))
-        CoUninitialize();
-    if (FAILED(hr)) {
-        wchar_t code[16];
-        swprintf(code, std::size(code), L"%08X", static_cast<unsigned>(hr));
-        fail(L"Cannot create the shortcut " + lnk.wstring() + L" (error 0x" + code + L")");
-    }
-}
-
-fs::path desktop_folder() {
-    PWSTR p = nullptr;
-    if (FAILED(SHGetKnownFolderPath(FOLDERID_Desktop, 0, nullptr, &p))) {
-        CoTaskMemFree(p);
-        fail(L"Cannot find the Desktop folder");
-    }
-    fs::path desktop = p;
-    CoTaskMemFree(p);
-    return desktop;
-}
-#else
 // A desktop entry that starts the game in its folder; executable, which desktops ask of entries on
 // the Desktop before they trust them.
 void create_shortcut(const fs::path& target, const fs::path& lnk) {
@@ -829,6 +650,5 @@ fs::path applications_folder() {
     const char* data = std::getenv("XDG_DATA_HOME");
     return (data && data[0] ? fs::path(data) : home() / ".local" / "share") / "applications";
 }
-#endif
 
 } // namespace setup

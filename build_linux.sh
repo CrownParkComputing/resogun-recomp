@@ -27,7 +27,7 @@ while (($#)); do
     esac
     shift
 done
-[[ $(uname -s) == Linux ]] || { echo 'This script is for Linux; on Windows use build_windows.ps1.' >&2; exit 1; }
+[[ $(uname -s) == Linux ]] || { echo 'This script is for Linux.' >&2; exit 1; }
 
 # clang as named by the distribution when there is no plain clang (Ubuntu's clang-18).
 if [[ -z ${CC:-} ]] && ! command -v clang >/dev/null; then

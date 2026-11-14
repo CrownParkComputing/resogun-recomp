@@ -9,7 +9,7 @@
 # A build of each platform is committed in prebuilt/ffmpeg-<os>.tar.xz with the version and options
 # it was configured with; when they match this script it is unpacked instead of built
 # (RESOGUN_FFMPEG_PREBUILT=0 builds from source anyway). --pack rebuilds from source and rewrites
-# that archive: run it on Windows (MSYS2 CLANG64) and on Ubuntu 24.04 (the Linux release's glibc;
+# that archive: run it on Ubuntu 24.04 (the Linux release's glibc;
 # tools/pack_ffmpeg_linux.sh does it in Docker) whenever the version or options change.
 #
 # usage: tools/build_ffmpeg.sh PREFIX     (CC names the compiler; nasm on PATH for the x86 assembly)
@@ -31,13 +31,8 @@ options=(
 key="$version ${options[*]}"
 stamp="$key ${CC:-clang}"
 if ((!pack)) && [[ -f $prefix/.stamp && $(<"$prefix/.stamp") == "$stamp" ]]; then exit 0; fi
-case $(uname -s) in MINGW*|MSYS*) os=windows ;; *) os=linux ;; esac
+os=linux
 prebuilt=$(cd -- "$(dirname -- "$0")/.." && pwd)/prebuilt/ffmpeg-$os.tar.xz
-# --pack from Git Bash: the MSYS2 CLANG64 clang and nasm first on PATH, as build.sh does.
-msys2_root=${MSYS2_ROOT:-/c/msys64}
-if ((pack)) && [[ $os == windows && -d $msys2_root/clang64/bin ]]; then
-    export PATH="$msys2_root/clang64/bin:$msys2_root/usr/bin:$PATH"
-fi
 
 # The prebuilt archive and FFmpeg's source are both .tar.xz.
 command -v xz >/dev/null || { echo 'FFmpeg: need xz (the xz-utils package).' >&2; exit 1; }
@@ -81,7 +76,6 @@ rm -rf "$work" "$prefix"
 mkdir -p "$work"
 tar -xJf "$archive" -C "$work" --strip-components=1
 prefix_abs=$(mkdir -p "$prefix" && cd "$prefix" && pwd)
-# Windows: D:/... (the native pkgconf and clang read the .pc files, not MSYS's /d/...).
 command -v cygpath >/dev/null && prefix_abs=$(cygpath -m "$prefix_abs")
 echo "FFmpeg $version: configuring the minimal build (log: $work/build.log)"
 (
