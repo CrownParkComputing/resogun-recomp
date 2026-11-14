@@ -71,12 +71,15 @@ LIBS_MANIFEST = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 README = """Resogun on PC
 Release {release}
 
-You need a decrypted dump of your own copy of the PS4 game (CUSA00038, version 1.10): the folder
-with eboot.bin, sce_module, sce_sys, audio.pck and stream.dat. No game files are included. Add-ons
-you own (ships and skins) need no files: a DLC folder with their sce_sys folders lists them.
+You need the .pkg of your own copy of the PS4 game (CUSA00038, version 1.10). The setup extracts
+it into a folder next to it (a few seconds, about 700 MB); a dump you extracted yourself works
+too, the folder with eboot.bin, sce_module, sce_sys, audio.pck and stream.dat. No game files are
+included. Add-ons you own (ships and skins) need no files: a DLC folder with their sce_sys folders
+lists them.
 
-1. Run resogun-setup.exe. Pick the game folder and where your saves go, then press Install.
-   It prepares the game from your dump (a few seconds) and offers a desktop shortcut.
+1. Run resogun-setup.exe. Browse to your .pkg (or Folder... for a dump you already have) and
+   pick where your saves go, then press Install. It prepares the game and offers a desktop
+   shortcut.
 2. Press Play Game, or later start resogun.exe or the shortcut.
 
 Run resogun-setup.exe again to change the game or save folder. After unpacking a newer release
@@ -96,14 +99,16 @@ Source and license (GPL-2.0-or-later): see LICENSE.txt.
 LINUX_README = """Resogun on PC (Linux)
 Release {release}
 
-You need a decrypted dump of your own copy of the PS4 game (CUSA00038, version 1.10): the folder
-with eboot.bin, sce_module, sce_sys, audio.pck and stream.dat. No game files are included. Add-ons
-you own (ships and skins) need no files: a DLC folder with their sce_sys folders lists them.
+You need the .pkg of your own copy of the PS4 game (CUSA00038, version 1.10). The setup extracts
+it into a folder next to it (a few seconds, about 700 MB); a dump you extracted yourself works
+too, the folder with eboot.bin, sce_module, sce_sys, audio.pck and stream.dat. No game files are
+included. Add-ons you own (ships and skins) need no files: a DLC folder with their sce_sys folders
+lists them.
 
-1. Run resogun-setup (from a file manager, or ./resogun-setup in a terminal). Pick the
-   game folder and where your saves go. It prepares the game from your dump (a few seconds) and
-   offers an entry in your application menu (Steam's "Add a Non-Steam Game" lists it too).
-   From a terminal it also takes: ./resogun-setup --game <dump> [--save <folder>]
+1. Run resogun-setup (from a file manager, or ./resogun-setup in a terminal). Pick your .pkg
+   (or a dump you already have) and where your saves go. It prepares the game and offers an
+   entry in your application menu (Steam's "Add a Non-Steam Game" lists it too).
+   From a terminal it also takes: ./resogun-setup --game <pkg or dump> [--save <folder>]
 2. Start the game from the menu entry, or run ./resogun.
 
 Run resogun-setup again to change the game or save folder. After unpacking a newer release

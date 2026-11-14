@@ -12,7 +12,7 @@ The game's own x86-64 code runs directly on Windows and Linux: the PS4 system li
 
 🚨 **No game files are included** 🚨
 
-This requires you to provide a decrypted dump of your own copy of the game. Only tested with **CUSA00038** with **update 1.10**.
+This requires you to provide the `.pkg` of your own copy of the game (or a decrypted dump of it). Only tested with **CUSA00038** with **update 1.10**.
 
 ## Features
 
@@ -27,8 +27,8 @@ This requires you to provide a decrypted dump of your own copy of the game. Only
   seconds, for window mode, resolution, VSync, frame rate and more.
 - **Keyboard and any gamepad.** DualShock 4 and DualSense work as they are, Xbox-style pads by
   button position.
-- **Easy setup:** point the installer at your dump, and it can add a desktop shortcut (on Linux, an application menu entry).
-- **Works with [RecompLauncher](https://recomplauncher.com):** it installs and updates the game from these releases, sets it up from your dump and shows the settings on the game's page.
+- **Easy setup:** point the installer at your `.pkg`, which it extracts for you, and it can add a desktop shortcut (on Linux, an application menu entry).
+- **Works with [RecompLauncher](https://recomplauncher.com):** it installs and updates the game from these releases, sets it up from your `.pkg` and shows the settings on the game's page.
 
 ## Requirements
 
@@ -37,8 +37,9 @@ This requires you to provide a decrypted dump of your own copy of the game. Only
   newer, Arch) and Python 3.10 or newer (`python3`) for the setup.
 - A CPU with AVX.
 - A GPU with Vulkan 1.3 and a current driver (on Linux, Mesa or the NVIDIA driver).
-- A decrypted dump of your own copy of the game: the folder with `eboot.bin`, `sce_module`,
-  `sce_sys`, `audio.pck` and `stream.dat`.
+- The `.pkg` of your own copy of the game. Setup extracts it into a folder next to it, which
+  takes a few seconds and about 700 MB. A dump you have already extracted works too: the folder
+  with `eboot.bin`, `sce_module`, `sce_sys`, `audio.pck` and `stream.dat`.
 
 A higher frame rate needs a PC that holds it: Resogun's game speed follows the frames it shows, so a frame that comes late slows the game down for that moment.
 
@@ -47,7 +48,7 @@ A higher frame rate needs a PC that holds it: Resogun's game speed follows the f
 1. [Download the latest release here](https://github.com/rcostanza/resogun-recomp/releases/latest)
 2. Unzip the release anywhere, for example `C:\Games\Resogun`.
 3. Run `resogun-setup.exe`.
-4. Choose your **game folder** (the dump), optionally a **DLC folder**, and a **save folder** (by default `save` inside the release folder). Each row says whether the folder is usable, and **Install** turns on once the game folder holds your dump (and the DLC folder exists, if you named one). Press it: setup prepares the game from your dump in a few seconds and offers a desktop shortcut. Your dumps are only read, never changed.
+4. **Browse...** to your game's `.pkg` (or **Folder...** for a dump you have already extracted), optionally a **DLC folder**, and a **save folder** (by default `save` inside the release folder). Each row says whether what you chose is usable, and **Install** turns on once the game row is happy (and the DLC folder exists, if you named one). Press it: setup extracts the `.pkg` next to itself if you gave one, then prepares the game in a few seconds and offers a desktop shortcut. Your `.pkg` and your dumps are only read, never changed.
 5. Press **Play Game**. Later, start `resogun.exe` or the shortcut.
 
 Run `resogun-setup.exe` again any time to change folders; it offers to copy your saves when the save folder moves. Untick **Skip the intro logos** there (or set `skip_intro=0` in `settings.ini`) to see the logos and the title screen again.
@@ -56,7 +57,7 @@ Run `resogun-setup.exe` again any time to change folders; it offers to copy your
 
 1. Extract the release anywhere you can write: `tar -xzf resogun-pc-<version>-linux.tar.gz -C ~/Games`
 2. Run `resogun-setup`: from a file manager it asks with dialogs, in a terminal it asks there. It also
-   takes `--game <dump> [--save <folder>] [--dlc <folder>]`.
+   takes `--game <pkg or dump> [--save <folder>] [--dlc <folder>]`.
 3. Start the game from the menu entry it adds, or run `./resogun`.
 
 On a Steam Deck, do this in Desktop Mode; _Add a Non-Steam Game_ in Steam then lists the menu entry.

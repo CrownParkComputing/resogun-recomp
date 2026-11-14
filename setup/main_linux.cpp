@@ -14,6 +14,7 @@
 //                       [--shortcut <folder>|desktop|menu]
 
 #include "setup.h"
+#include "pkgdec.h"
 
 #include <SDL3/SDL.h>
 #include <unistd.h>
@@ -52,10 +53,11 @@ void err(const std::wstring& s) {
 // --- command line -------------------------------------------------------------------------------
 
 constexpr wchar_t kUsage[] =
-    L"usage: resogun-setup --game <dump or eboot.bin> [--save <folder>] [--copy-saves]\n"
+    L"usage: resogun-setup --game <pkg or dump> [--save <folder>] [--copy-saves]\n"
     L"                         [--dlc <folder>|--no-dlc] [--skip-intro|--play-intro] [--progress]\n"
     L"                         [--shortcut <folder>|desktop|menu]\n"
-    L"  --game        the decrypted game dump (eboot.bin, sce_module, sce_sys, stream.dat); only ever read\n"
+    L"  --game        your game .pkg, extracted into a folder next to it, or a dump you have\n"
+    L"                already extracted (eboot.bin, sce_module, sce_sys, stream.dat); only ever read\n"
     L"  --save        where your saves go (default: the one paths.ini names, else save/ here)\n"
     L"  --copy-saves  when --save changes, copy the saves from the old save folder\n"
     L"  --dlc         one more folder of DLC to read, e.g. shadPS4's addcont (default: the one\n"
@@ -144,6 +146,9 @@ public:
     virtual ~Asker() = default;
     // A folder (or the dump's eboot.bin), starting from `current`; nullopt when the player cancels.
     virtual std::optional<fs::path> folder(const std::wstring& title, const fs::path& current) = 0;
+    // A file (a PS4 .pkg); the picker starts where `current` is, and `current` is the answer
+    // Enter gives only when it is a .pkg itself. nullopt when the player cancels.
+    virtual std::optional<fs::path> file(const std::wstring& title, const fs::path& current) = 0;
     // The index of the answer picked (the first is the default); -1 when the player cancels.
     virtual int choose(const std::wstring& question, const std::vector<std::wstring>& answers) = 0;
     virtual void tell(const std::wstring& message, bool error) = 0;
@@ -166,6 +171,29 @@ public:
             value = a == std::wstring::npos ? L"" : value.substr(a, b - a + 1);
             if (value.empty() && !current.empty())
                 return current;
+            if (value.empty())
+                continue;
+            if (value.rfind(L"~/", 0) == 0)
+                if (const char* home = std::getenv("HOME"))
+                    value = setup::widen(home) + value.substr(1);
+            return setup::path_of(value);
+        }
+    }
+    std::optional<fs::path> file(const std::wstring& title, const fs::path& current) override {
+        // What paths.ini remembers is the extracted folder, not a .pkg: Enter keeps it only when
+        // the player did name a .pkg last time.
+        fs::path keep = setup::is_pkg(current) ? current : fs::path();
+        for (;;) {
+            out(title + (keep.empty() ? L"" : L"\n  (Enter keeps " + setup::text(keep) + L")"));
+            std::cout << "> " << std::flush;
+            std::string line;
+            if (!std::getline(std::cin, line))
+                return std::nullopt;
+            std::wstring value = setup::widen(line);
+            size_t a = value.find_first_not_of(L" \t'\""), b = value.find_last_not_of(L" \t'\"");
+            value = a == std::wstring::npos ? L"" : value.substr(a, b - a + 1);
+            if (value.empty() && !keep.empty())
+                return keep;
             if (value.empty())
                 continue;
             if (value.rfind(L"~/", 0) == 0)
@@ -229,6 +257,42 @@ public:
         if (!pick.error.empty())
             tell(L"No folder picker is available (" + setup::widen(pick.error) +
                      L").\n\nRun resogun-setup in a terminal, or with --game <folder>.",
+                 true);
+        return pick.path;
+    }
+    std::optional<fs::path> file(const std::wstring& title, const fs::path& current) override {
+        struct Pick {
+            std::atomic<bool> done{false};
+            std::optional<fs::path> path;
+            std::string error;
+        } pick;
+        SDL_PropertiesID props = SDL_CreateProperties();
+        SDL_SetStringProperty(props, SDL_PROP_FILE_DIALOG_TITLE_STRING, setup::narrow(title).c_str());
+        SDL_DialogFileFilter filters[] = {{"PS4 packages", "pkg"}};
+        SDL_SetPointerProperty(props, SDL_PROP_FILE_DIALOG_FILTERS_POINTER, filters);
+        SDL_SetNumberProperty(props, SDL_PROP_FILE_DIALOG_NFILTERS_NUMBER, 1);
+        std::error_code ec;
+        fs::path start = current.empty() ? fs::path() : current.parent_path();
+        if (!start.empty() && fs::is_directory(start, ec))
+            SDL_SetStringProperty(props, SDL_PROP_FILE_DIALOG_LOCATION_STRING, start.c_str());
+        // The callback may run on another thread; `done` is set last.
+        auto picked = [](void* data, const char* const* files, int) {
+            auto* p = static_cast<Pick*>(data);
+            if (!files)
+                p->error = SDL_GetError();
+            else if (files[0])
+                p->path = fs::path(files[0]);
+            p->done = true;
+        };
+        SDL_ShowFileDialogWithProperties(SDL_FILEDIALOG_OPENFILE, picked, &pick, props);
+        while (!pick.done) {
+            SDL_Event e;
+            SDL_WaitEventTimeout(&e, 50);
+        }
+        SDL_DestroyProperties(props);
+        if (!pick.error.empty())
+            tell(L"No file picker is available (" + setup::widen(pick.error) +
+                     L").\n\nRun resogun-setup in a terminal, or with --game <file.pkg>.",
                  true);
         return pick.path;
     }
@@ -300,10 +364,25 @@ int run_asking(Asker& ask) {
             return 0;
     }
 
-    std::optional<fs::path> game =
-        ask.folder(L"Select the game folder (your game dump, the one with eboot.bin)", paths ? paths->game : fs::path());
-    if (!game)
+    // The game comes from a PS4 .pkg, which the setup extracts into a folder next to it; a player
+    // who has already extracted one picks that folder instead.
+    std::optional<fs::path> game;
+    int source = ask.choose(L"How do you have the game?\n\n"
+                            L"A .pkg is extracted into a folder next to it; a dump folder is used as it is.",
+                            {L"A PS4 .pkg file", L"A folder I have already extracted", L"Cancel"});
+    if (source < 0 || source == 2)
         return 1;
+    if (source == 0) {
+        std::optional<fs::path> picked = ask.file(L"Select the .pkg of the game", paths ? paths->game : fs::path());
+        if (!picked)
+            return 1;
+        game = *picked;
+    } else {
+        game = ask.folder(L"Select the game folder (your game dump, the one with eboot.bin)",
+                          paths ? paths->game : fs::path());
+        if (!game)
+            return 1;
+    }
     fs::path save = paths ? paths->save : setup::default_save();
     int keep = ask.choose(L"Keep your saves in this folder?\n\n" + setup::text(save),
                           {L"Yes", L"Choose another folder", L"Cancel"});
@@ -384,6 +463,9 @@ int main(int argc, char** argv) {
     std::vector<std::wstring> args;
     for (int i = 1; i < argc; ++i)
         args.push_back(setup::widen(argv[i]));
+    // The extractor (scripts/pkg_extract.py) asks the setup to decrypt the game data.
+    if (!args.empty() && args[0] == L"--pkg-decrypt")
+        return setup::pkg_decrypt_main(std::vector<std::wstring>(args.begin() + 1, args.end()));
     if (!args.empty())
         return run_cli(args);
     if (isatty(STDIN_FILENO) && isatty(STDOUT_FILENO)) {

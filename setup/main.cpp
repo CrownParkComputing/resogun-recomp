@@ -13,6 +13,7 @@
 //                           [--shortcut <folder>|desktop]
 
 #include "setup.h"
+#include "pkgdec.h"
 
 #include <windows.h>
 #include <commctrl.h>
@@ -79,10 +80,11 @@ private:
 };
 
 constexpr wchar_t kUsage[] =
-    L"usage: resogun-setup.exe --game <dump or eboot.bin> [--save <folder>] [--copy-saves]\n"
+    L"usage: resogun-setup.exe --game <pkg or dump> [--save <folder>] [--copy-saves]\n"
     L"                             [--dlc <folder>|--no-dlc] [--skip-intro|--play-intro] [--progress]\n"
     L"                             [--shortcut <folder>|desktop]\n"
-    L"  --game        the decrypted game dump (eboot.bin, sce_module, sce_sys, stream.dat); only ever read\n"
+    L"  --game        your game .pkg, extracted into a folder next to it, or a dump you have\n"
+    L"                already extracted (eboot.bin, sce_module, sce_sys, stream.dat); only ever read\n"
     L"  --save        where your saves go (default: the one paths.ini names, else save\\ here)\n"
     L"  --copy-saves  when --save changes, copy the saves from the old save folder\n"
     L"  --dlc         one more folder of DLC to read, e.g. shadPS4's addcont (default: the one\n"
@@ -164,6 +166,7 @@ int run_cli(const std::vector<std::wstring>& args) {
 enum : int {
     kGameEdit = 101,
     kGameBrowse,
+    kGamePkg,
     kDlcEdit,
     kDlcBrowse,
     kSaveEdit,
@@ -193,11 +196,13 @@ struct Folder {
     HWND edit = nullptr, browse = nullptr;
     std::wstring note;
     bool ok = false;
+    int field_width = 0; // 0: the width the other rows use
 };
 
 struct Ui {
     HWND wnd = nullptr, play = nullptr, install = nullptr, exit = nullptr, skip_intro = nullptr;
-    Folder game{L"Game folder", 66}, dlc{L"Extra DLC folder (optional)", 146}, save{L"Save folder", 226};
+    HWND game_folder = nullptr; // the button that picks an extracted dump instead of a .pkg
+    Folder game{L"Game .pkg or dump folder", 66}, dlc{L"Extra DLC folder (optional)", 146}, save{L"Save folder", 226};
     std::vector<HWND> inputs; // disabled while installing (Play Game too, and until the folder is set up)
     HFONT font = nullptr, bold = nullptr, title = nullptr;
     HBRUSH field = nullptr;
@@ -212,6 +217,8 @@ Ui ui;
 // Layout in 96-dpi units; the client area is kWidth x kHeight.
 constexpr int kWidth = 640, kHeight = 452;
 constexpr int kRowLeft = 36, kRowRight = 604, kRowHeight = 72, kFieldLeft = 58, kBrowseLeft = 480, kBrowseWidth = 104;
+// The game row has a second button (the dump folder), so its field is shorter.
+constexpr int kFolderLeft = 362, kFolderWidth = 104;
 constexpr int kPanelTop = 40, kPanelBottom = 352, kButtonsTop = 404;
 
 int px(int v) {
@@ -281,7 +288,8 @@ void text(HDC dc, const std::wstring& s, RECT r, HFONT font, COLORREF c, UINT fo
 
 // The box the edit sits in: a dark field with the rows' edge colour.
 RECT field_box(const Folder& f) {
-    return rect(kFieldLeft, f.y + 36, kBrowseLeft - kFieldLeft - 10, 28);
+    int width = f.field_width ? f.field_width : kBrowseLeft - kFieldLeft - 10;
+    return rect(kFieldLeft, f.y + 36, width, 28);
 }
 
 void paint_folder(HDC dc, const Folder& f) {
@@ -311,15 +319,19 @@ void paint(HDC dc) {
          ui.status_bad ? color::Bad : color::Help, DT_LEFT | DT_WORDBREAK | DT_END_ELLIPSIS);
 }
 
+// The buttons that sit on a folder row's gradient rather than on the window's background.
+bool on_row(int id) {
+    return id == kGameBrowse || id == kGamePkg || id == kDlcBrowse || id == kSaveBrowse;
+}
+
 // Owner-drawn buttons: the rows' teal, the highlighted cyan for the one action that is ready, and a
 // dim teal when disabled.
 void draw_button(const DRAWITEMSTRUCT& d) {
     HDC dc = d.hDC;
     RECT r = d.rcItem;
-    fill(dc, r, d.hwndItem == ui.skip_intro ? color::Panel : d.CtlID == kGameBrowse || d.CtlID == kDlcBrowse ||
-                                                                 d.CtlID == kSaveBrowse
-                                                             ? color::RowBottom
-                                                             : color::Back);
+    fill(dc, r, d.hwndItem == ui.skip_intro ? color::Panel
+                : on_row(d.CtlID)           ? color::RowBottom
+                                            : color::Back);
     bool disabled = d.itemState & ODS_DISABLED, pressed = d.itemState & ODS_SELECTED, focus = d.itemState & ODS_FOCUS;
     wchar_t label[128] = {};
     GetWindowTextW(d.hwndItem, label, 128);
@@ -346,8 +358,7 @@ void draw_button(const DRAWITEMSTRUCT& d) {
     COLORREF bottom = disabled ? color::OffBottom : primary ? color::FocusBottom : color::RowBottom;
     if (pressed)
         std::swap(top, bottom);
-    bool browse = d.CtlID == kGameBrowse || d.CtlID == kDlcBrowse || d.CtlID == kSaveBrowse;
-    int skew = browse ? 0 : (r.bottom - r.top) / 4; // Browse sits on a row's gradient: no corners to fill
+    int skew = on_row(d.CtlID) ? 0 : (r.bottom - r.top) / 4; // on a row's gradient: no corners to fill
     shape(dc, r, skew, top, bottom, focus ? color::FocusEdge : disabled ? color::Dim : color::RowEdge,
           focus ? px(2) : 1);
     text(dc, label, r, ui.bold, disabled ? color::Dim : color::Text, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
@@ -368,7 +379,10 @@ void validate() {
     std::wstring game = text_of(ui.game.edit), dlc = text_of(ui.dlc.edit), save = text_of(ui.save.edit);
     ui.game.ok = false;
     if (game.empty()) {
-        ui.game.note = L"Required: your decrypted dump";
+        ui.game.note = L"Required: your .pkg or dump";
+    } else if (setup::is_pkg(setup::path_of(game))) {
+        ui.game.ok = true;
+        ui.game.note = L"PS4 .pkg: it will be extracted";
     } else if (!fs::is_directory(setup::game_folder(game), ec)) {
         ui.game.note = L"Folder not found";
     } else if (auto missing = setup::missing_game_files(game); !missing.empty()) {
@@ -422,6 +436,40 @@ void browse(HWND edit, const wchar_t* title) {
     if (!current.empty()) {
         std::error_code ec;
         fs::path start = setup::game_folder(current);
+        IShellItem* item = nullptr;
+        if (fs::is_directory(start, ec) &&
+            SUCCEEDED(SHCreateItemFromParsingName(start.c_str(), nullptr, IID_PPV_ARGS(&item)))) {
+            dlg->SetFolder(item);
+            item->Release();
+        }
+    }
+    IShellItem* result = nullptr;
+    if (SUCCEEDED(dlg->Show(ui.wnd)) && SUCCEEDED(dlg->GetResult(&result))) {
+        PWSTR path = nullptr;
+        if (SUCCEEDED(result->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
+            SetWindowTextW(edit, path); // EN_CHANGE validates it
+            CoTaskMemFree(path);
+        }
+        result->Release();
+    }
+    dlg->Release();
+}
+
+// The shell's file picker, for a PS4 .pkg: the game can come from one instead of a dump.
+void browse_pkg(HWND edit) {
+    IFileOpenDialog* dlg = nullptr;
+    if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dlg))))
+        return;
+    DWORD opts = 0;
+    dlg->GetOptions(&opts);
+    dlg->SetTitle(L"Select the .pkg of the game");
+    dlg->SetOptions(opts | FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST);
+    COMDLG_FILTERSPEC filters[] = {{L"PS4 packages (*.pkg)", L"*.pkg"}, {L"All files", L"*.*"}};
+    dlg->SetFileTypes(2, filters);
+    std::wstring current = text_of(edit);
+    if (!current.empty()) {
+        std::error_code ec;
+        fs::path start = fs::path(current).parent_path();
         IShellItem* item = nullptr;
         if (fs::is_directory(start, ec) &&
             SUCCEEDED(SHCreateItemFromParsingName(start.c_str(), nullptr, IID_PPV_ARGS(&item)))) {
@@ -527,16 +575,21 @@ void add_folder(Folder& f, int edit_id, int browse_id) {
 
 void create_controls() {
     // Tab order: the three folders top to bottom, the intro box, then the buttons.
-    add_folder(ui.game, kGameEdit, kGameBrowse);
+    ui.game.field_width = kFolderLeft - kFieldLeft - 10; // the folder button takes the room of the field
+    // Browse picks the game's .pkg, which the setup extracts; the folder button is for a dump the
+    // player has already extracted.
+    add_folder(ui.game, kGameEdit, kGamePkg);
     add_folder(ui.dlc, kDlcEdit, kDlcBrowse);
     add_folder(ui.save, kSaveEdit, kSaveBrowse);
+    ui.game_folder = add(WC_BUTTONW, L"Folder...", WS_TABSTOP | BS_OWNERDRAW,
+                         rect(kFolderLeft, ui.game.y + 35, kFolderWidth, 30), kGameBrowse);
     ui.skip_intro = add(WC_BUTTONW, L"Skip the intro logos (skip_intro=0 in settings.ini brings them back)",
                         WS_TABSTOP | BS_OWNERDRAW, rect(kRowLeft + 4, 310, kRowRight - kRowLeft - 8, 30), kSkipIntro);
     ui.play = add(WC_BUTTONW, L"Play Game", WS_TABSTOP | BS_OWNERDRAW, rect(kWidth - 28 - 3 * 128 + 8, kButtonsTop, 120, 36), kPlay);
     ui.install = add(WC_BUTTONW, L"Install", WS_TABSTOP | BS_OWNERDRAW, rect(kWidth - 28 - 2 * 128 + 8, kButtonsTop, 120, 36), IDOK);
     ui.exit = add(WC_BUTTONW, L"Exit", WS_TABSTOP | BS_OWNERDRAW, rect(kWidth - 28 - 128 + 8, kButtonsTop, 120, 36), IDCANCEL);
-    ui.inputs = {ui.game.edit, ui.game.browse, ui.dlc.edit, ui.dlc.browse, ui.save.edit, ui.save.browse,
-                 ui.skip_intro, ui.exit};
+    ui.inputs = {ui.game.edit, ui.game.browse, ui.game_folder, ui.dlc.edit, ui.dlc.browse,
+                 ui.save.edit, ui.save.browse, ui.skip_intro, ui.exit};
 
     // Start from what the last install chose (paths.ini here, else the per-user copy), else an empty
     // game and DLC folder and save\ here.
@@ -583,6 +636,9 @@ LRESULT CALLBACK wnd_proc(HWND wnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         case kGameBrowse:
             browse(ui.game.edit, L"Select the game folder (the one with eboot.bin)");
+            return 0;
+        case kGamePkg:
+            browse_pkg(ui.game.edit);
             return 0;
         case kDlcBrowse:
             browse(ui.dlc.edit, L"Select your DLC folder (e.g. shadPS4's addcont)");
@@ -705,6 +761,9 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     std::vector<std::wstring> args(argv + 1, argv + argc);
     LocalFree(argv);
+    // The extractor (scripts/pkg_extract.py) asks the setup to decrypt the game data.
+    if (!args.empty() && args[0] == L"--pkg-decrypt")
+        return setup::pkg_decrypt_main(std::vector<std::wstring>(args.begin() + 1, args.end()));
     if (!args.empty())
         return run_cli(args);
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);

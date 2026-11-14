@@ -487,6 +487,14 @@ fs::path game_folder(const fs::path& path) {
     return fs::is_regular_file(p, ec) ? p.parent_path() : p;
 }
 
+bool is_pkg(const fs::path& path) {
+    return lower(path.extension().wstring()) == L".pkg";
+}
+
+fs::path pkg_folder(const fs::path& pkg) {
+    return clean(pkg.parent_path() / pkg.stem());
+}
+
 std::vector<std::wstring> missing_game_files(const fs::path& game) {
     std::error_code ec;
     fs::path folder = game_folder(game);
@@ -594,7 +602,7 @@ bool has_saves(const fs::path& save) {
 }
 
 fs::path install(const Options& opt, const Log& log) {
-    fs::path root = clean(opt.root), game = game_folder(opt.game), save = clean(opt.save);
+    fs::path root = clean(opt.root), save = clean(opt.save);
     fs::path dlc = opt.dlc.empty() ? fs::path() : clean(opt.dlc);
     fs::path prepare = root / L"prepare", image = root / L"game", exe = root / kGameExe;
     auto step = [&](double done, const std::wstring& what) {
@@ -602,6 +610,9 @@ fs::path install(const Options& opt, const Log& log) {
             opt.progress(done, what);
     };
     step(0.0, L"Checking your dump");
+    // A .pkg instead of a dump: it is extracted into a folder next to it, and that folder is the dump.
+    fs::path pkg = is_pkg(opt.game) ? clean(opt.game) : fs::path();
+    fs::path game = pkg.empty() ? game_folder(opt.game) : pkg_folder(pkg);
     if (inside(save, game))
         fail(L"Choose a save folder outside the game folder. Setup never writes into the game folder.");
     if (inside(root, game) || inside(game, root))
@@ -613,14 +624,28 @@ fs::path install(const Options& opt, const Log& log) {
         dlc.clear(); // the save folder's addcont is always read
 
     std::error_code ec;
-    std::vector<std::wstring> missing = missing_game_files(game);
-    if (!missing.empty())
-        fail(L"This folder isn't a decrypted Resogun dump:\n" + text(game) +
-             L"\n\nMissing: " + join(missing));
     for (const fs::path& f : {exe, prepare / L"run.py", root / L"release.txt"})
         if (!fs::is_regular_file(f, ec))
             fail(text(f) + L" is missing." + kIncomplete);
     std::vector<std::wstring> python = python_command(prepare);
+
+    if (!pkg.empty()) {
+        step(0.02, L"Extracting your .pkg");
+        log(L"Extracting " + text(pkg) + L" into " + text(game));
+        // The extractor decrypts the game data with the setup program (--xts-tool), which is the
+        // only part of it that is not slow enough to do in Python.
+        std::vector<std::wstring> extract = python;
+        extract.insert(extract.end(), {text(prepare / L"scripts" / L"pkg_extract.py"), text(pkg),
+                                       L"--out", text(game), L"--xts-tool",
+                                       text(exe_folder() / kSetupExe)});
+        if (run(extract, prepare, log))
+            fail(L"Extracting the .pkg failed. The log says why.");
+    }
+
+    std::vector<std::wstring> missing = missing_game_files(game);
+    if (!missing.empty())
+        fail(L"This folder isn't a decrypted Resogun dump:\n" + text(game) +
+             L"\n\nMissing: " + join(missing));
 
     step(0.05, L"Preparing the game from your dump");
     log(L"Preparing the game from " + text(game));

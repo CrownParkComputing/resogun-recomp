@@ -7,6 +7,8 @@ text as a break.
 
 ## v0.10
 
+- A dump patched for a DLC unlocker now plays: the eboot reaches libSceAppContent through the linked `dlcldr` module instead of loading the system module, so the loader holds that reference and allows its queries (it stopped on the loading screen before).
+- Setup now takes your game's `.pkg` and extracts it for you, so you no longer need to extract a dump yourself; a dump you already have still works, from the **Folder...** button or `--game`.
 - Fix compiled shaders not being reused on Linux (issue #8)
 
 ## v0.9

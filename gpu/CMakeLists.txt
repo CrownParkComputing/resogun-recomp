@@ -195,7 +195,8 @@ if (WIN32)
         ${CMAKE_CURRENT_SOURCE_DIR}/../res/libs.manifest $<TARGET_FILE_DIR:resogun>/libs/libs.manifest)
     # resogun-setup.exe (setup/): sets up a release folder (tools/package.py) from a player's dump.
     # Linked statically, so it starts without the MSYS2 DLLs.
-    add_executable(resogun-setup WIN32 ../setup/main.cpp ../setup/setup.cpp ../setup/setup.rc)
+    add_executable(resogun-setup WIN32 ../setup/main.cpp ../setup/setup.cpp ../setup/pkgdec.cpp
+                              ../setup/setup.rc)
     target_compile_definitions(resogun-setup PRIVATE UNICODE _UNICODE)
     target_link_options(resogun-setup PRIVATE -municode -static)
     target_link_libraries(resogun-setup PRIVATE comctl32 ole32 shell32 uuid gdi32 msimg32 dwmapi)
@@ -205,7 +206,7 @@ else()
     target_link_options(resogun PRIVATE -no-pie)
     target_link_libraries(resogun PRIVATE ${CMAKE_DL_LIBS} m)
     # resogun-setup (setup/): the same install, asking in a terminal or with the desktop's dialogs (SDL).
-    add_executable(resogun-setup ../setup/main_linux.cpp ../setup/setup.cpp)
+    add_executable(resogun-setup ../setup/main_linux.cpp ../setup/setup.cpp ../setup/pkgdec.cpp)
     target_link_libraries(resogun-setup PRIVATE PkgConfig::SDL3)
 endif()
 # resogun: runtime and renderer unit tests (bash build.sh --test builds and runs every *-test).
@@ -288,6 +289,12 @@ set_source_files_properties(../tests/test_pipeline_binary_cache.cpp PROPERTIES
 add_executable(png-decode-test EXCLUDE_FROM_ALL ../tests/test_png_decode.cpp shim/resogun_png.cpp)
 target_compile_options(png-decode-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 target_link_libraries(png-decode-test PRIVATE Resogun::FFmpeg)
+# The AES-128 and XTS of the setup (setup/pkgdec.cpp): the test includes the file itself.
+add_executable(pkgdec-test EXCLUDE_FROM_ALL ../tests/test_pkgdec.cpp ../setup/setup.cpp)
+target_compile_options(pkgdec-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+if (WIN32)
+    target_link_libraries(pkgdec-test PRIVATE comctl32 ole32 shell32 uuid gdi32 msimg32 dwmapi)
+endif()
 add_executable(aliasing-test EXCLUDE_FROM_ALL ../tests/test_aliasing.cpp
     shadps4/video_core/texture_cache/aliasing.cpp shadps4/video_core/texture_cache/host_compatibility.cpp)
 target_compile_options(aliasing-test PRIVATE -UNDEBUG)

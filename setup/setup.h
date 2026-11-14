@@ -21,7 +21,7 @@ struct Error {
 
 struct Options {
     std::filesystem::path root; // the release folder: the game exe, prepare/, and what the setup adds
-    std::filesystem::path game; // the dump folder or its eboot.bin
+    std::filesystem::path game; // the dump folder or its eboot.bin, or a PS4 .pkg to extract
     std::filesystem::path save; // saves and the launch log (run.py's --user)
     std::optional<std::filesystem::path> copy_saves_from; // the old save folder, whose saves go to `save`
     std::optional<bool> skip_intro; // settings.ini skip_intro to write; unset keeps what is there
@@ -46,9 +46,11 @@ using Log = std::function<void(const std::wstring&)>;
 
 #ifdef _WIN32
 constexpr wchar_t kGameExe[] = L"resogun.exe";
+constexpr wchar_t kSetupExe[] = L"resogun-setup.exe";
 constexpr wchar_t kShortcutName[] = L"Resogun.lnk";
 #else
 constexpr wchar_t kGameExe[] = L"resogun";
+constexpr wchar_t kSetupExe[] = L"resogun-setup";
 // A desktop entry (freedesktop.org), in the application menu or on the Desktop.
 constexpr wchar_t kShortcutName[] = L"resogun.desktop";
 #endif
@@ -65,6 +67,10 @@ std::string narrow(std::wstring_view s);
 std::filesystem::path exe_folder();
 // The dump folder for a path to it or to its eboot.bin (absolute, normalized).
 std::filesystem::path game_folder(const std::filesystem::path& path);
+// True when `path` names a PS4 .pkg: the game can be imported from one instead of a dump.
+bool is_pkg(const std::filesystem::path& path);
+// The folder a .pkg is extracted into: next to the file, named after it (CUSA00038.pkg -> CUSA00038).
+std::filesystem::path pkg_folder(const std::filesystem::path& pkg);
 // The files a Resogun dump needs that `game` (a path game_folder() accepts) lacks; empty for a dump.
 std::vector<std::wstring> missing_game_files(const std::filesystem::path& game);
 // What `root`/paths.ini names, if it names both folders.
