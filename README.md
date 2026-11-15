@@ -149,3 +149,5 @@ I (human) am a programmer, but I know nothing about C++ which is required to mak
 Based on and inspired by [theatrhythm-fbl-pc](https://github.com/YAPhoa/theatrhythm-fbl-pc).
 
 GPL-2.0-or-later, see [LICENSE](LICENSE). Runtime follows [shadPS4](https://github.com/shadps4-emu/shadPS4). Resogun is a game by Housemarque, published by Sony Interactive Entertainment; this project is not affiliated with or endorsed by either.
+
+Press **L3 + R3 together** (both stick clicks) to toggle the internal settings menu. Release both before the next toggle. F10 and holding Select for two seconds remain supported.

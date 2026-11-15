@@ -128,7 +128,7 @@ ImTextureData* splash_texture = nullptr;
 std::atomic<int> splash_state{SplashNone}, splash_lit_frames{0};
 std::atomic<s64> splash_since{0}, splash_fade_from{0};
 std::chrono::steady_clock::time_point last_present{};
-// The Display Settings panel (F10, or Select held for 2 s: src/runtime_pad.c). The row and
+// The settings panel (F10, L3+R3, or Select held for 2 s: src/runtime_pad.c). The row and
 // dirty flag are guarded by imgui_mutex; the values live in ResogunSettings.
 std::atomic<bool> display_open{false};
 
@@ -570,7 +570,7 @@ void DisplaySettingsBox() {
     dl->AddRectFilled(ImVec2(x0, top), ImVec2(x1, top + panel_h), PageInk::Panel);
     dl->AddRect(ImVec2(x0, top), ImVec2(x1, top + panel_h), PageInk::Frame, 0.0f, 0, line);
 
-    const char* title = "DISPLAY SETTINGS";
+    const char* title = "SETTINGS";
     const float title_size = 46.0f * px, title_w = font->CalcTextSizeA(title_size, FLT_MAX, 0.0f, title).x;
     const float tab_w = title_w + 120.0f * px, tab_h = 62.0f * px, tab_x = o.x + (size.x - tab_w) * 0.5f;
     const ImVec2 tab_a(tab_x, top - tab_h + 8.0f * px), tab_b(tab_x + tab_w, top + 8.0f * px);
@@ -615,7 +615,7 @@ void DisplaySettingsBox() {
     // The buttons, each on a tab, along the bottom.
     const char* const hints[3] = {"Up/Down  Choose",
                                   "Left/Right, Cross (A)  Change",
-                                  "Circle (B), Select, Esc  Back"};
+                                  "Circle (B), L3+R3, Esc  Back"};
     const float hint_size = 24.0f * px, hint_h = 46.0f * px, hint_gap = 24.0f * px;
     float hint_w[3], total = 0.0f;
     for (int i = 0; i < 3; ++i) {
@@ -1175,6 +1175,13 @@ void OpenDisplaySettings() {
         display_row = 0;
         display_open = true;
     }
+}
+
+void ToggleDisplaySettings() {
+    std::scoped_lock lock{imgui_mutex};
+    if (text_entry_active || choice_active || exit_open) return;
+    if (display_open) CloseDisplaySettings();
+    else { display_row = 0; display_open = true; }
 }
 
 bool DisplaySettingsOpen() {

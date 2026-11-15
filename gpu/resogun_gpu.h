@@ -37,8 +37,9 @@ int resogun_gpu_choice_confirm(const char *title, const char *const *items, int 
                                  const unsigned char *png, uint64_t size, const char *caption, const char *unavailable);
 /* 1 while a dialog (save list, text entry) is shown: the game's pad input is held neutral. */
 int resogun_gpu_overlay_captures_input(void);
-/* Opens the Display Settings panel (F10, or Select held for 2 s: runtime_pad.c); 1 while it is open. */
+/* Opens the Display Settings panel (F10, L3+R3, or Select held for 2 s: runtime_pad.c); 1 while it is open. */
 void resogun_display_settings_open(void);
+void resogun_display_settings_toggle(void);
 int resogun_display_settings_is_open(void);
 /* Asks "Exit Resogun?" (No focused); Yes closes the game as closing its window does. Any thread. */
 void resogun_exit_prompt_open(void);

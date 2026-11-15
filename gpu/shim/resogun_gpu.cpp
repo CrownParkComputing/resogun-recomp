@@ -410,6 +410,10 @@ extern "C" void resogun_display_settings_open(void) {
     ResogunOverlay::OpenDisplaySettings();
 }
 
+extern "C" void resogun_display_settings_toggle(void) {
+    ResogunOverlay::ToggleDisplaySettings();
+}
+
 extern "C" int resogun_display_settings_is_open(void) {
     return ResogunOverlay::DisplaySettingsOpen() ? 1 : 0;
 }
